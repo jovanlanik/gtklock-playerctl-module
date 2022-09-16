@@ -25,7 +25,7 @@ const gchar module_version[] = "v1.3.6";
 static int self_id;
 
 PlayerctlPlayerManager *player_manager = NULL;
-PlayerctlPlayer *player = NULL;
+PlayerctlPlayer *current_player = NULL;
 SoupSession *soup_session = NULL;
 
 static int art_size = 64;
@@ -62,7 +62,7 @@ static void setup_album_art(struct Window *ctx) {
 	if(!art_size) return;
 
 	GError *error = NULL;
-	gchar *uri = playerctl_player_print_metadata_prop(player, "mpris:artUrl", NULL);
+	gchar *uri = playerctl_player_print_metadata_prop(current_player, "mpris:artUrl", NULL);
 	if(error != NULL) {
 		g_warning("Failed loading album art: %s", error->message);
 		g_error_free(error);
@@ -80,26 +80,26 @@ static void setup_album_art(struct Window *ctx) {
 }
 
 static void play_pause(GtkButton *self, gpointer user_data) {
-	playerctl_player_play_pause(player, NULL);
+	playerctl_player_play_pause(current_player, NULL);
 }
 
 static void setup_playerctl(struct Window *ctx);
 
 static void next(GtkButton *self, gpointer user_data) {
-	playerctl_player_next(player, NULL);
+	playerctl_player_next(current_player, NULL);
 }
 
 static void previous(GtkButton *self, gpointer user_data) {
-	playerctl_player_previous(player, NULL);
+	playerctl_player_previous(current_player, NULL);
 }
 
 static void setup_playerctl(struct Window *ctx) {
 	if(MODULE_DATA(ctx) != NULL) return;
 
 	// If a player isn't available or is stopped, don't create player UI
-	if(!player) return;
+	if(!current_player) return;
 	PlayerctlPlaybackStatus status;
-	g_object_get(player, "playback-status", &status, NULL);
+	g_object_get(current_player, "playback-status", &status, NULL);
 	if(status == PLAYERCTL_PLAYBACK_STATUS_STOPPED) return;
 	
 	MODULE_DATA(ctx) = g_malloc(sizeof(struct playerctl));
@@ -163,7 +163,7 @@ static void setup_playerctl(struct Window *ctx) {
 	gtk_widget_set_valign(label_box, GTK_ALIGN_CENTER);
 	gtk_container_add(GTK_CONTAINER(box), label_box);
 
-	gchar *title = playerctl_player_get_title(player, NULL);
+	gchar *title = playerctl_player_get_title(current_player, NULL);
 	if(title && title[0] != '\0') {
 		gchar *title_bold = g_markup_printf_escaped("<b>%s</b>", title);
 
@@ -174,7 +174,7 @@ static void setup_playerctl(struct Window *ctx) {
 		gtk_container_add(GTK_CONTAINER(label_box), title_label);
 	}
 
-	gchar *album = playerctl_player_get_album(player, NULL);
+	gchar *album = playerctl_player_get_album(current_player, NULL);
 	if(album && album[0] != '\0') {
 		GtkWidget *album_label = gtk_label_new(album);
 		gtk_widget_set_halign(album_label, GTK_ALIGN_START);
@@ -182,7 +182,7 @@ static void setup_playerctl(struct Window *ctx) {
 		gtk_container_add(GTK_CONTAINER(label_box), album_label);
 	}
 
-	gchar *artist = playerctl_player_get_artist(player, NULL);
+	gchar *artist = playerctl_player_get_artist(current_player, NULL);
 	if(artist && artist[0] != '\0') {
 		GtkWidget *artist_label = gtk_label_new(artist);
 		gtk_widget_set_halign(artist_label, GTK_ALIGN_START);
@@ -220,11 +220,11 @@ void g_module_unload(GModule *m) {
 }
 
 static void name_appeared(PlayerctlPlayerManager *self, PlayerctlPlayerName *name, gpointer user_data) {
-	if(player) return;
+	if(current_player) return;
 	
-	player = playerctl_player_new_from_name(name, NULL);
-	playerctl_player_manager_manage_player(player_manager, player);
-	g_object_unref(player);
+	current_player = playerctl_player_new_from_name(name, NULL);
+	playerctl_player_manager_manage_player(player_manager, current_player);
+	g_object_unref(current_player);
 }
 
 static void metadata(PlayerctlPlayer *player, GVariant *metadata, gpointer user_data) {
@@ -239,10 +239,8 @@ static void metadata(PlayerctlPlayer *player, GVariant *metadata, gpointer user_
 
 static void playback_status(PlayerctlPlayer *player, PlayerctlPlaybackStatus status, gpointer user_data) {
 	struct GtkLock *gtklock = user_data;
-	struct Window *ctx;
-	if(!gtklock->use_layer_shell) ctx = g_array_index(gtklock->windows, struct Window *, 0);
-	else ctx = gtklock->focused_window;
-	if(ctx) {
+	if(gtklock->focused_window) {
+		struct Window *ctx = gtklock->focused_window;
 		const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PLAYING ? "media-playback-pause" : "media-playback-start";
 		GtkWidget *image = gtk_image_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
 		gtk_button_set_image(GTK_BUTTON(PLAYERCTL(ctx)->play_pause_button), image);
@@ -254,14 +252,11 @@ static void player_appeared(PlayerctlPlayerManager *self, PlayerctlPlayer *playe
 	g_signal_connect(player, "playback-status", G_CALLBACK(playback_status), user_data);
 
 	struct GtkLock *gtklock = user_data;
-	struct Window *ctx;
-	if(!gtklock->use_layer_shell) ctx = g_array_index(gtklock->windows, struct Window *, 0);
-	else ctx = gtklock->focused_window;
-	if(ctx) setup_playerctl(ctx);
+	if(gtklock->focused_window) setup_playerctl(gtklock->focused_window);
 }
 
 static void player_vanished(PlayerctlPlayerManager *self, PlayerctlPlayer *player, gpointer user_data) {
-	player = NULL;
+	current_player = NULL;
 }
 
 void on_activation(struct GtkLock *gtklock, int id) {
@@ -274,7 +269,6 @@ void on_activation(struct GtkLock *gtklock, int id) {
 		g_warning("Playerctl failed: %s", error->message);
 		g_error_free(error);
 	} else {
-		g_signal_connect(player_manager, "name-appeared", G_CALLBACK(name_appeared), NULL);
 		g_signal_connect(player_manager, "player-appeared", G_CALLBACK(player_appeared), gtklock);
 		g_signal_connect(player_manager, "player-vanished", G_CALLBACK(player_vanished), NULL);
 
@@ -282,10 +276,12 @@ void on_activation(struct GtkLock *gtklock, int id) {
 		g_object_get(player_manager, "player-names", &available_players, NULL);
 		if(available_players) {
 			PlayerctlPlayerName *name = available_players->data;
-			player = playerctl_player_new_from_name(name, NULL);
-			playerctl_player_manager_manage_player(player_manager, player);
-			g_object_unref(player);
+			current_player = playerctl_player_new_from_name(name, NULL);
+			playerctl_player_manager_manage_player(player_manager, current_player);
+			g_object_unref(current_player);
 		}
+		g_signal_connect(player_manager, "name-appeared", G_CALLBACK(name_appeared), NULL);
+
 	}
 
 	soup_session = soup_session_new();
