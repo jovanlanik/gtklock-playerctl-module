@@ -239,12 +239,14 @@ static void metadata(PlayerctlPlayer *player, GVariant *metadata, gpointer user_
 
 static void playback_status(PlayerctlPlayer *player, PlayerctlPlaybackStatus status, gpointer user_data) {
 	struct GtkLock *gtklock = user_data;
-	if(gtklock->focused_window) {
-		struct Window *ctx = gtklock->focused_window;
-		const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PAUSED ? "media-playback-pause" : "media-playback-start";
+	struct Window *ctx;
+	if(!gtklock->use_layer_shell) ctx = g_array_index(gtklock->windows, struct Window *, 0);
+	else ctx = gtklock->focused_window;
+	if(ctx) {
+		const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PLAYING ? "media-playback-pause" : "media-playback-start";
 		GtkWidget *image = gtk_image_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
 		gtk_button_set_image(GTK_BUTTON(PLAYERCTL(ctx)->play_pause_button), image);
-	}
+	} 
 }
 
 static void player_appeared(PlayerctlPlayerManager *self, PlayerctlPlayer *player, gpointer user_data) {
@@ -252,7 +254,10 @@ static void player_appeared(PlayerctlPlayerManager *self, PlayerctlPlayer *playe
 	g_signal_connect(player, "playback-status", G_CALLBACK(playback_status), user_data);
 
 	struct GtkLock *gtklock = user_data;
-	if(gtklock->focused_window) setup_playerctl(gtklock->focused_window);
+	struct Window *ctx;
+	if(!gtklock->use_layer_shell) ctx = g_array_index(gtklock->windows, struct Window *, 0);
+	else ctx = gtklock->focused_window;
+	if(ctx) setup_playerctl(ctx);
 }
 
 static void player_vanished(PlayerctlPlayerManager *self, PlayerctlPlayer *player, gpointer user_data) {
