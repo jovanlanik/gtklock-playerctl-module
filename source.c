@@ -45,13 +45,14 @@ static void request_callback(GObject *source_object, GAsyncResult *res, gpointer
 	if(error != NULL) {
 		g_warning("Failed loading album art: %s", error->message);
 		g_error_free(error);
-		error = NULL;
+		return;
 	}
 
 	GdkPixbuf *pixbuf = gdk_pixbuf_new_from_stream_at_scale(stream, -1, art_size, TRUE, NULL, &error);
 	if(error != NULL) {
 		g_warning("Failed loading album art: %s", error->message);
 		g_error_free(error);
+		return;
 	}
 
 	gtk_image_set_from_pixbuf(GTK_IMAGE(PLAYERCTL(ctx)->album_art), pixbuf);
@@ -62,10 +63,18 @@ static void setup_album_art(struct Window *ctx) {
 
 	GError *error = NULL;
 	gchar *uri = playerctl_player_print_metadata_prop(player, "mpris:artUrl", NULL);
+	if(error != NULL) {
+		g_warning("Failed loading album art: %s", error->message);
+		g_error_free(error);
+		return;
+	}
+	if(!uri) return;
+
 	SoupRequest *request = soup_session_request(soup_session, uri, &error);
 	if(error != NULL) {
 		g_warning("Failed loading album art: %s", error->message);
 		g_error_free(error);
+		return;
 	}
 	soup_request_send_async(request, NULL, request_callback, ctx);
 }
@@ -143,7 +152,7 @@ static void setup_playerctl(struct Window *ctx) {
 	gtk_widget_set_name(box, "playerctl-box");
 	gtk_container_add(GTK_CONTAINER(PLAYERCTL(ctx)->revealer), box);
 
-	PLAYERCTL(ctx)->album_art = gtk_image_new();
+	PLAYERCTL(ctx)->album_art = gtk_image_new_from_icon_name("image-missing", GTK_ICON_SIZE_BUTTON);
 	gtk_widget_set_halign(PLAYERCTL(ctx)->album_art, GTK_ALIGN_CENTER);
 	gtk_widget_set_name(PLAYERCTL(ctx)->album_art, "album-art");
 	gtk_widget_set_size_request(PLAYERCTL(ctx)->album_art, art_size, art_size);
