@@ -8,7 +8,6 @@
 
 #include "gtklock-module.h"
 
-// TODO: simplify module data
 #define MODULE_DATA(x) (x->module_data[self_id])
 #define PLAYERCTL(x) ((struct playerctl *)MODULE_DATA(x))
 
@@ -16,7 +15,8 @@ extern void config_load(const char *path, const char *group, GOptionEntry entrie
 
 struct playerctl {
 	GtkWidget *revealer;
-	GtkWidget *box;
+	GtkWidget *album_art;
+	GtkWidget *play_pause_button;
 };
 
 const gchar module_name[] = "playerctl";
@@ -26,6 +26,7 @@ static int self_id;
 
 PlayerctlPlayerManager *player_manager = NULL;
 PlayerctlPlayer *player = NULL;
+SoupSession *soup_session = NULL;
 
 static int art_size = 64;
 static gchar *position = "top-center";
@@ -36,61 +37,57 @@ GOptionEntry module_entries[] = {
 	{ NULL },
 };
 
-static void setup_album_art(struct Window *ctx) {
-	// TODO: Error messages
-	// TODO: Async
-	// TODO: URI from player
-	if(!art_size) return;
-
-	return;
-	//gchar *uri = "file:///home/lanikjo/Downloads/th-407814961.jpg";
-	gchar *uri = "https://upload.wikimedia.org/wikipedia/en/4/40/Bsmor.jpg";
-
+static void request_callback(GObject *source_object, GAsyncResult *res, gpointer user_data) {
+	struct Window *ctx = user_data;
 	GError *error = NULL;
 
-	SoupSession *session = soup_session_new();
-	SoupRequest *request = soup_session_request(session, uri, &error);
+	GInputStream *stream = soup_request_send_finish(SOUP_REQUEST(source_object), res, &error);
 	if(error != NULL) {
-		g_warning("session: %s", error->message);
-		g_error_free(error);
-		error = NULL;
-	}
-
-	GInputStream *stream = soup_request_send(request, NULL, &error);
-	if(error != NULL) {
-		g_warning("request: %s", error->message);
+		g_warning("Failed loading album art: %s", error->message);
 		g_error_free(error);
 		error = NULL;
 	}
 
 	GdkPixbuf *pixbuf = gdk_pixbuf_new_from_stream_at_scale(stream, -1, art_size, TRUE, NULL, &error);
 	if(error != NULL) {
-		g_warning("stream: %s", error->message);
+		g_warning("Failed loading album art: %s", error->message);
 		g_error_free(error);
 	}
 
-	GtkWidget *art = gtk_image_new_from_pixbuf(pixbuf);
-	gtk_widget_set_halign(art, GTK_ALIGN_CENTER);
-	gtk_widget_set_name(art, "album-art");
-	gtk_box_pack_start(GTK_BOX(PLAYERCTL(ctx)->box), art, FALSE, FALSE, 0);
+	gtk_image_set_from_pixbuf(GTK_IMAGE(PLAYERCTL(ctx)->album_art), pixbuf);
+}
+
+static void setup_album_art(struct Window *ctx) {
+	if(!art_size) return;
+
+	GError *error = NULL;
+	gchar *uri = playerctl_player_print_metadata_prop(player, "mpris:artUrl", NULL);
+	SoupRequest *request = soup_session_request(soup_session, uri, &error);
+	if(error != NULL) {
+		g_warning("Failed loading album art: %s", error->message);
+		g_error_free(error);
+	}
+	soup_request_send_async(request, NULL, request_callback, ctx);
+}
+
+static void play_pause(GtkButton *self, gpointer user_data) {
+	playerctl_player_play_pause(player, NULL);
 }
 
 static void setup_playerctl(struct Window *ctx);
 
-static void play_pause(GtkButton *self, gpointer user_data) {
-	playerctl_player_play_pause(player, NULL);
-	setup_playerctl((struct Window *)user_data);
+static void next(GtkButton *self, gpointer user_data) {
+	playerctl_player_next(player, NULL);
 }
 
-// TODO: widget names
-// TODO: comments
-static void setup_playerctl(struct Window *ctx) {
-	if(MODULE_DATA(ctx) != NULL) {
-		gtk_widget_destroy(PLAYERCTL(ctx)->revealer);
-		g_free(MODULE_DATA(ctx));
-		MODULE_DATA(ctx) = NULL;
-	}
+static void previous(GtkButton *self, gpointer user_data) {
+	playerctl_player_previous(player, NULL);
+}
 
+static void setup_playerctl(struct Window *ctx) {
+	if(MODULE_DATA(ctx) != NULL) return;
+
+	// If a player isn't available or is stopped, don't create player UI
 	if(!player) return;
 	PlayerctlPlaybackStatus status;
 	g_object_get(player, "playback-status", &status, NULL);
@@ -142,23 +139,29 @@ static void setup_playerctl(struct Window *ctx) {
 	}
 	else gtk_overlay_add_overlay(GTK_OVERLAY(ctx->overlay), PLAYERCTL(ctx)->revealer);
 
-	PLAYERCTL(ctx)->box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 15);
-	gtk_container_add(GTK_CONTAINER(PLAYERCTL(ctx)->revealer), PLAYERCTL(ctx)->box);
+	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 15);
+	gtk_widget_set_name(box, "playerctl-box");
+	gtk_container_add(GTK_CONTAINER(PLAYERCTL(ctx)->revealer), box);
 
-	// TODO: Album art
+	PLAYERCTL(ctx)->album_art = gtk_image_new();
+	gtk_widget_set_halign(PLAYERCTL(ctx)->album_art, GTK_ALIGN_CENTER);
+	gtk_widget_set_name(PLAYERCTL(ctx)->album_art, "album-art");
+	gtk_widget_set_size_request(PLAYERCTL(ctx)->album_art, art_size, art_size);
+	gtk_container_add(GTK_CONTAINER(box), PLAYERCTL(ctx)->album_art);
 	setup_album_art(ctx);
 
 	GtkWidget *label_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_widget_set_valign(label_box, GTK_ALIGN_CENTER);
-	gtk_container_add(GTK_CONTAINER(PLAYERCTL(ctx)->box), label_box);
+	gtk_container_add(GTK_CONTAINER(box), label_box);
 
 	gchar *title = playerctl_player_get_title(player, NULL);
 	if(title && title[0] != '\0') {
+		gchar *title_bold = g_markup_printf_escaped("<b>%s</b>", title);
+
 		GtkWidget *title_label = gtk_label_new(NULL);
 		gtk_widget_set_halign(title_label, GTK_ALIGN_START);
-		// TODO: bold
 		gtk_widget_set_name(title_label, "title-label");
-		gtk_label_set_markup(GTK_LABEL(title_label), title);
+		gtk_label_set_markup(GTK_LABEL(title_label), title_bold);
 		gtk_container_add(GTK_CONTAINER(label_box), title_label);
 	}
 
@@ -181,33 +184,63 @@ static void setup_playerctl(struct Window *ctx) {
 	GtkWidget *control_box = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
 	gtk_widget_set_valign(control_box, GTK_ALIGN_CENTER);
 	gtk_button_box_set_layout(GTK_BUTTON_BOX(control_box), GTK_BUTTONBOX_EXPAND);
-	gtk_container_add(GTK_CONTAINER(PLAYERCTL(ctx)->box), control_box);
+	gtk_container_add(GTK_CONTAINER(box), control_box);
 
-	GtkWidget *backward = gtk_button_new_from_icon_name("media-skip-backward", GTK_ICON_SIZE_BUTTON);
-	gtk_container_add(GTK_CONTAINER(control_box), backward);
+	GtkWidget *previous_button = gtk_button_new_from_icon_name("media-skip-backward", GTK_ICON_SIZE_BUTTON);
+	g_signal_connect(previous_button, "clicked", G_CALLBACK(previous), ctx);
+	gtk_widget_set_name(previous_button, "previous-button");
+	gtk_container_add(GTK_CONTAINER(control_box), previous_button);
 
 	const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PLAYING ? "media-playback-pause" : "media-playback-start";
-	GtkWidget *play_pause_button = gtk_button_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
-	g_signal_connect(play_pause_button, "clicked", G_CALLBACK(play_pause), ctx);
-	gtk_container_add(GTK_CONTAINER(control_box), play_pause_button);
+	PLAYERCTL(ctx)->play_pause_button = gtk_button_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
+	g_signal_connect(PLAYERCTL(ctx)->play_pause_button, "clicked", G_CALLBACK(play_pause), ctx);
+	gtk_widget_set_name(PLAYERCTL(ctx)->play_pause_button, "play-pause-button");
+	gtk_container_add(GTK_CONTAINER(control_box), PLAYERCTL(ctx)->play_pause_button);
 
-	GtkWidget *forward = gtk_button_new_from_icon_name("media-skip-forward", GTK_ICON_SIZE_BUTTON);
-	gtk_container_add(GTK_CONTAINER(control_box), forward);
+	GtkWidget *next_button = gtk_button_new_from_icon_name("media-skip-forward", GTK_ICON_SIZE_BUTTON);
+	g_signal_connect(next_button, "clicked", G_CALLBACK(next), ctx);
+	gtk_widget_set_name(next_button, "next-button");
+	gtk_container_add(GTK_CONTAINER(control_box), next_button);
 
 	gtk_widget_show_all(PLAYERCTL(ctx)->revealer);
 }
 
 void g_module_unload(GModule *m) {
 	g_object_unref(player_manager);
+	g_object_unref(soup_session);
 }
 
-// TODO: signals
 static void name_appeared(PlayerctlPlayerManager *self, PlayerctlPlayerName *name, gpointer user_data) {
 	if(player) return;
 	
 	player = playerctl_player_new_from_name(name, NULL);
 	playerctl_player_manager_manage_player(player_manager, player);
 	g_object_unref(player);
+}
+
+static void metadata(PlayerctlPlayer *player, GVariant *metadata, gpointer user_data) {
+	struct GtkLock *gtklock = user_data;
+	if(gtklock->focused_window) {
+		gtk_widget_destroy(PLAYERCTL(gtklock->focused_window)->revealer);
+		g_free(MODULE_DATA(gtklock->focused_window));
+		MODULE_DATA(gtklock->focused_window) = NULL;
+		setup_playerctl(gtklock->focused_window);
+	}
+}
+
+static void playback_status(PlayerctlPlayer *player, PlayerctlPlaybackStatus status, gpointer user_data) {
+	struct GtkLock *gtklock = user_data;
+	if(gtklock->focused_window) {
+		struct Window *ctx = gtklock->focused_window;
+		const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PAUSED ? "media-playback-pause" : "media-playback-start";
+		GtkWidget *image = gtk_image_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
+		gtk_button_set_image(GTK_BUTTON(PLAYERCTL(ctx)->play_pause_button), image);
+	}
+}
+
+static void player_appeared(PlayerctlPlayerManager *self, PlayerctlPlayer *player, gpointer user_data) {
+	g_signal_connect(player, "metadata", G_CALLBACK(metadata), user_data);
+	g_signal_connect(player, "playback-status", G_CALLBACK(playback_status), user_data);
 
 	struct GtkLock *gtklock = user_data;
 	if(gtklock->focused_window) setup_playerctl(gtklock->focused_window);
@@ -227,7 +260,8 @@ void on_activation(struct GtkLock *gtklock, int id) {
 		g_warning("Playerctl failed: %s", error->message);
 		g_error_free(error);
 	} else {
-		g_signal_connect(player_manager, "name-appeared", G_CALLBACK(name_appeared), gtklock);
+		g_signal_connect(player_manager, "name-appeared", G_CALLBACK(name_appeared), NULL);
+		g_signal_connect(player_manager, "player-appeared", G_CALLBACK(player_appeared), gtklock);
 		g_signal_connect(player_manager, "player-vanished", G_CALLBACK(player_vanished), NULL);
 
 		GList *available_players = NULL;
@@ -239,6 +273,8 @@ void on_activation(struct GtkLock *gtklock, int id) {
 			g_object_unref(player);
 		}
 	}
+
+	soup_session = soup_session_new();
 }
 
 void on_focus_change(struct GtkLock *gtklock, struct Window *win, struct Window *old) {
