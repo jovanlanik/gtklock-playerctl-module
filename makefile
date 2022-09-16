@@ -8,8 +8,8 @@ NAME := playerctl-module.so
 PREFIX ?= /usr/local
 INSTALL ?= install
 
-LIBS := gtk+-3.0 gmodule-export-2.0 playerctl
-CFLAGS += -std=c11 $(shell pkg-config --cflags $(LIBS))
+LIBS := gtk+-3.0 gmodule-export-2.0 playerctl libsoup-2.4
+CFLAGS += -std=c11 -fPIC $(shell pkg-config --cflags $(LIBS))
 LDLIBS += $(shell pkg-config --libs $(LIBS))
 
 SRC = $(wildcard *.c) 
