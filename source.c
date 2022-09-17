@@ -59,8 +59,6 @@ static void request_callback(GObject *source_object, GAsyncResult *res, gpointer
 }
 
 static void setup_album_art(struct Window *ctx) {
-	if(!art_size) return;
-
 	GError *error = NULL;
 	gchar *uri = playerctl_player_print_metadata_prop(current_player, "mpris:artUrl", NULL);
 	if(error != NULL) {
@@ -152,12 +150,14 @@ static void setup_playerctl(struct Window *ctx) {
 	gtk_widget_set_name(box, "playerctl-box");
 	gtk_container_add(GTK_CONTAINER(PLAYERCTL(ctx)->revealer), box);
 
-	PLAYERCTL(ctx)->album_art = gtk_image_new_from_icon_name("image-missing", GTK_ICON_SIZE_BUTTON);
-	gtk_widget_set_halign(PLAYERCTL(ctx)->album_art, GTK_ALIGN_CENTER);
-	gtk_widget_set_name(PLAYERCTL(ctx)->album_art, "album-art");
-	gtk_widget_set_size_request(PLAYERCTL(ctx)->album_art, art_size, art_size);
-	gtk_container_add(GTK_CONTAINER(box), PLAYERCTL(ctx)->album_art);
-	setup_album_art(ctx);
+	if(art_size) {
+		PLAYERCTL(ctx)->album_art = gtk_image_new_from_icon_name("image-missing", GTK_ICON_SIZE_BUTTON);
+		gtk_widget_set_halign(PLAYERCTL(ctx)->album_art, GTK_ALIGN_CENTER);
+		gtk_widget_set_name(PLAYERCTL(ctx)->album_art, "album-art");
+		gtk_widget_set_size_request(PLAYERCTL(ctx)->album_art, art_size, art_size);
+		gtk_container_add(GTK_CONTAINER(box), PLAYERCTL(ctx)->album_art);
+		setup_album_art(ctx);
+	}
 
 	GtkWidget *label_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_widget_set_valign(label_box, GTK_ALIGN_CENTER);
@@ -256,7 +256,13 @@ static void player_appeared(PlayerctlPlayerManager *self, PlayerctlPlayer *playe
 }
 
 static void player_vanished(PlayerctlPlayerManager *self, PlayerctlPlayer *player, gpointer user_data) {
+	struct GtkLock *gtklock = user_data;
 	current_player = NULL;
+	if(gtklock->focused_window) {
+		gtk_widget_destroy(PLAYERCTL(gtklock->focused_window)->revealer);
+		g_free(MODULE_DATA(gtklock->focused_window));
+		MODULE_DATA(gtklock->focused_window) = NULL;
+	}
 }
 
 void on_activation(struct GtkLock *gtklock, int id) {
@@ -270,7 +276,7 @@ void on_activation(struct GtkLock *gtklock, int id) {
 		g_error_free(error);
 	} else {
 		g_signal_connect(player_manager, "player-appeared", G_CALLBACK(player_appeared), gtklock);
-		g_signal_connect(player_manager, "player-vanished", G_CALLBACK(player_vanished), NULL);
+		g_signal_connect(player_manager, "player-vanished", G_CALLBACK(player_vanished), gtklock);
 
 		GList *available_players = NULL;
 		g_object_get(player_manager, "player-names", &available_players, NULL);
@@ -281,7 +287,6 @@ void on_activation(struct GtkLock *gtklock, int id) {
 			g_object_unref(current_player);
 		}
 		g_signal_connect(player_manager, "name-appeared", G_CALLBACK(name_appeared), NULL);
-
 	}
 
 	soup_session = soup_session_new();
