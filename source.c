@@ -20,7 +20,7 @@ struct playerctl {
 };
 
 const gchar module_name[] = "playerctl";
-const gchar module_version[] = "v1.3.6";
+const gchar module_version[] = "v1.3.7";
 
 static int self_id;
 
@@ -167,7 +167,6 @@ static void setup_playerctl(struct Window *ctx) {
 	gchar *title = playerctl_player_get_title(current_player, NULL);
 	if(title && title[0] != '\0') {
 		GtkWidget *title_label = gtk_label_new(NULL);
-		gtk_widget_set_halign(title_label, GTK_ALIGN_FILL);
 		gtk_widget_set_name(title_label, "title-label");
 		gtk_label_set_xalign(GTK_LABEL(title_label), 0.0f);
 		gtk_label_set_ellipsize(GTK_LABEL(title_label), PANGO_ELLIPSIZE_END);
@@ -180,7 +179,6 @@ static void setup_playerctl(struct Window *ctx) {
 	gchar *album = playerctl_player_get_album(current_player, NULL);
 	if(album && album[0] != '\0') {
 		GtkWidget *album_label = gtk_label_new(album);
-		gtk_widget_set_halign(album_label, GTK_ALIGN_FILL);
 		gtk_widget_set_name(album_label, "album-label");
 		gtk_label_set_xalign(GTK_LABEL(album_label), 0.0f);
 		gtk_label_set_ellipsize(GTK_LABEL(album_label), PANGO_ELLIPSIZE_END);
@@ -191,7 +189,6 @@ static void setup_playerctl(struct Window *ctx) {
 	gchar *artist = playerctl_player_get_artist(current_player, NULL);
 	if(artist && artist[0] != '\0') {
 		GtkWidget *artist_label = gtk_label_new(artist);
-		gtk_widget_set_halign(artist_label, GTK_ALIGN_FILL);
 		gtk_widget_set_name(artist_label, "artist-label");
 		gtk_label_set_xalign(GTK_LABEL(artist_label), 0.0f);
 		gtk_label_set_ellipsize(GTK_LABEL(artist_label), PANGO_ELLIPSIZE_END);
