@@ -151,7 +151,7 @@ static void setup_playerctl(struct Window *ctx) {
 	gtk_container_add(GTK_CONTAINER(PLAYERCTL(ctx)->revealer), box);
 
 	if(art_size) {
-		PLAYERCTL(ctx)->album_art = gtk_image_new_from_icon_name("image-missing", GTK_ICON_SIZE_BUTTON);
+		PLAYERCTL(ctx)->album_art = gtk_image_new_from_icon_name("audio-x-generic-symbolic", GTK_ICON_SIZE_BUTTON);
 		gtk_widget_set_halign(PLAYERCTL(ctx)->album_art, GTK_ALIGN_CENTER);
 		gtk_widget_set_name(PLAYERCTL(ctx)->album_art, "album-art");
 		gtk_widget_set_size_request(PLAYERCTL(ctx)->album_art, art_size, art_size);
