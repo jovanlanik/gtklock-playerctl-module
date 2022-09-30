@@ -43,6 +43,11 @@ GOptionEntry module_entries[] = {
 	{ NULL },
 };
 
+static void setup_album_art_placeholder(struct Window *ctx) {
+	gtk_image_set_from_icon_name(GTK_IMAGE(PLAYERCTL(ctx)->album_art) , "audio-x-generic-symbolic", GTK_ICON_SIZE_BUTTON);
+	return;
+}
+
 static void request_callback(GObject *source_object, GAsyncResult *res, gpointer user_data) {
 	struct Window *ctx = user_data;
 	GError *error = NULL;
@@ -52,6 +57,8 @@ static void request_callback(GObject *source_object, GAsyncResult *res, gpointer
 		g_warning("Failed loading album art: %s", error->message);
 		g_error_free(error);
 		error = NULL;
+
+		setup_album_art_placeholder(ctx);
 		return;
 	}
 
@@ -59,6 +66,8 @@ static void request_callback(GObject *source_object, GAsyncResult *res, gpointer
 	if(error != NULL) {
 		g_warning("Failed loading album art: %s", error->message);
 		g_error_free(error);
+
+		setup_album_art_placeholder(ctx);
 		return;
 	}
 
@@ -72,14 +81,22 @@ static void setup_album_art(struct Window *ctx) {
 		g_warning("Failed loading album art: %s", error->message);
 		g_error_free(error);
 		error = NULL;
+
+		setup_album_art_placeholder(ctx);
 		return;
 	}
-	if(!uri) return;
+
+	if(!uri || uri[0] == '\0') {
+		setup_album_art_placeholder(ctx);
+		return;
+	}
 
 	SoupRequest *request = soup_session_request(soup_session, uri, &error);
 	if(error != NULL) {
 		g_warning("Failed loading album art: %s", error->message);
 		g_error_free(error);
+
+		setup_album_art_placeholder(ctx);
 		return;
 	}
 	soup_request_send_async(request, NULL, request_callback, ctx);
@@ -117,6 +134,8 @@ static void widget_destroy(GtkWidget *widget, gpointer data) {
 }
 
 static void setup_metadata(struct Window *ctx) {
+	setup_album_art(ctx);
+
 	gtk_container_foreach(GTK_CONTAINER(PLAYERCTL(ctx)->label_box), widget_destroy, NULL);
 
 	gchar *title = playerctl_player_get_title(current_player, NULL);
@@ -230,7 +249,6 @@ static void setup_playerctl(struct Window *ctx) {
 		gtk_widget_set_name(PLAYERCTL(ctx)->album_art, "album-art");
 		gtk_widget_set_size_request(PLAYERCTL(ctx)->album_art, art_size, art_size);
 		gtk_container_add(GTK_CONTAINER(box), PLAYERCTL(ctx)->album_art);
-		setup_album_art(ctx);
 	}
 
 	PLAYERCTL(ctx)->label_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -287,10 +305,7 @@ static void playback_status(PlayerctlPlayer *player, PlayerctlPlaybackStatus sta
 	struct GtkLock *gtklock = user_data;
 	if(!gtklock->focused_window) return;
 
-	if(MODULE_DATA(gtklock->focused_window)) {
-		setup_metadata(gtklock->focused_window);
-		return;
-	}
+	if(MODULE_DATA(gtklock->focused_window)) setup_metadata(gtklock->focused_window);
 
 	struct Window *ctx = gtklock->focused_window;
 	const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PLAYING ? "media-playback-pause" : "media-playback-start";
