@@ -34,12 +34,12 @@ SoupSession *soup_session = NULL;
 
 static int art_size = 64;
 static gchar *position = "top-center";
-static gboolean show_unfocused = FALSE;
 static gboolean show_hidden = FALSE;
 
 GOptionEntry module_entries[] = {
 	{ "art-size", 0, 0, G_OPTION_ARG_INT, &art_size, "Album art size in pixels", NULL },
 	{ "position", 0, 0, G_OPTION_ARG_STRING, &position, "Position of media player controls", NULL },
+	{ "show-hidden", 0, 0, G_OPTION_ARG_NONE, &show_hidden, "Show media controls when hidden", NULL },
 	{ NULL },
 };
 
@@ -361,7 +361,7 @@ void on_focus_change(struct GtkLock *gtklock, struct Window *win, struct Window 
 	if(MODULE_DATA(win)) setup_metadata(win);
 	else setup_playerctl(win);
 
-	gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(win)->revealer), !gtklock->hidden);
+	gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(win)->revealer), !gtklock->hidden || show_hidden);
 	if(old != NULL && win != old)
 		gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(old)->revealer), FALSE);
 }
@@ -376,7 +376,7 @@ void on_window_empty(struct GtkLock *gtklock, struct Window *ctx) {
 void on_idle_hide(struct GtkLock *gtklock) {
 	if(gtklock->focused_window) {
 		GtkRevealer *revealer = GTK_REVEALER(PLAYERCTL(gtklock->focused_window)->revealer);	
-		gtk_revealer_set_reveal_child(revealer, FALSE);
+		gtk_revealer_set_reveal_child(revealer, show_hidden);
 	}
 }
 
