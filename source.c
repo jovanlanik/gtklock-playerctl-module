@@ -23,8 +23,8 @@ struct playerctl {
 };
 
 const gchar module_name[] = "playerctl";
-const guint module_major_version = 1;
-const guint module_minor_version = 4;
+const guint module_major_version = 2;
+const guint module_minor_version = 0;
 
 static int self_id;
 
@@ -133,9 +133,18 @@ static void widget_destroy(GtkWidget *widget, gpointer data) {
 	gtk_widget_destroy(widget);
 }
 
-static void setup_metadata(struct Window *ctx) {
-	setup_album_art(ctx);
+static void setup_playback(struct Window *ctx, PlayerctlPlaybackStatus status) {
+	const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PLAYING ? "media-playback-pause" : "media-playback-start";
+	GtkWidget *image = gtk_image_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
+	gtk_button_set_image(GTK_BUTTON(PLAYERCTL(ctx)->play_pause_button), image);
+}
 
+static void setup_metadata(struct Window *ctx) {
+	PlayerctlPlaybackStatus status = PLAYERCTL_PLAYBACK_STATUS_STOPPED;
+	if(current_player) g_object_get(current_player, "playback-status", &status, NULL);
+
+	setup_album_art(ctx);
+	setup_playback(ctx, status);
 	gtk_container_foreach(GTK_CONTAINER(PLAYERCTL(ctx)->label_box), widget_destroy, NULL);
 
 	gchar *title = playerctl_player_get_title(current_player, NULL);
@@ -182,23 +191,17 @@ static void setup_metadata(struct Window *ctx) {
 	gtk_widget_set_sensitive(PLAYERCTL(ctx)->play_pause_button, can_pause);
 	gtk_widget_set_sensitive(PLAYERCTL(ctx)->next_button, can_go_next);
 
+	gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(ctx)->revealer), current_player != NULL);
 	gtk_widget_show_all(PLAYERCTL(ctx)->revealer);
 }
 
 static void setup_playerctl(struct Window *ctx) {
-	// If a player isn't available, don't create player UI
-	if(!current_player) return;
-
 	if(MODULE_DATA(ctx) != NULL) return;
 	MODULE_DATA(ctx) = g_malloc(sizeof(struct playerctl));
-
-	PlayerctlPlaybackStatus status;
-	g_object_get(current_player, "playback-status", &status, NULL);
 
 	PLAYERCTL(ctx)->revealer = gtk_revealer_new();
 	g_object_set(PLAYERCTL(ctx)->revealer, "margin", 5, NULL);
 	gtk_widget_set_name(PLAYERCTL(ctx)->revealer, "playerctl-revealer");
-	gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(ctx)->revealer), status != PLAYERCTL_PLAYBACK_STATUS_STOPPED);
 	gtk_revealer_set_transition_type(GTK_REVEALER(PLAYERCTL(ctx)->revealer), GTK_REVEALER_TRANSITION_TYPE_NONE);
 
 	if(
@@ -266,8 +269,7 @@ static void setup_playerctl(struct Window *ctx) {
 	gtk_widget_set_name(PLAYERCTL(ctx)->previous_button, "previous-button");
 	gtk_container_add(GTK_CONTAINER(control_box), PLAYERCTL(ctx)->previous_button);
 
-	const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PLAYING ? "media-playback-pause" : "media-playback-start";
-	PLAYERCTL(ctx)->play_pause_button = gtk_button_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
+	PLAYERCTL(ctx)->play_pause_button = gtk_button_new();
 	g_signal_connect(PLAYERCTL(ctx)->play_pause_button, "clicked", G_CALLBACK(play_pause), ctx);
 	gtk_widget_set_name(PLAYERCTL(ctx)->play_pause_button, "play-pause-button");
 	gtk_container_add(GTK_CONTAINER(control_box), PLAYERCTL(ctx)->play_pause_button);
@@ -307,10 +309,7 @@ static void playback_status(PlayerctlPlayer *player, PlayerctlPlaybackStatus sta
 
 	if(MODULE_DATA(gtklock->focused_window)) setup_metadata(gtklock->focused_window);
 
-	struct Window *ctx = gtklock->focused_window;
-	const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PLAYING ? "media-playback-pause" : "media-playback-start";
-	GtkWidget *image = gtk_image_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
-	gtk_button_set_image(GTK_BUTTON(PLAYERCTL(ctx)->play_pause_button), image);
+	setup_playback(gtklock->focused_window, status);
 }
 
 static void player_appeared(PlayerctlPlayerManager *self, PlayerctlPlayer *player, gpointer user_data) {
@@ -366,7 +365,7 @@ void on_focus_change(struct GtkLock *gtklock, struct Window *win, struct Window 
 		gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(old)->revealer), FALSE);
 }
 
-void on_window_empty(struct GtkLock *gtklock, struct Window *ctx) {
+void on_window_destroy(struct GtkLock *gtklock, struct Window *ctx) {
 	if(MODULE_DATA(ctx) != NULL) {
 		g_free(MODULE_DATA(ctx));
 		MODULE_DATA(ctx) = NULL;
