@@ -132,7 +132,7 @@ static void widget_destroy(GtkWidget *widget, gpointer data) {
 }
 
 static void setup_playback(struct Window *ctx, PlayerctlPlaybackStatus status) {
-	const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PLAYING ? "media-playback-pause" : "media-playback-start";
+	const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PLAYING ? "media-playback-pause-symbolic" : "media-playback-start-symbolic";
 	GtkWidget *image = gtk_image_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
 	gtk_button_set_image(GTK_BUTTON(PLAYERCTL(ctx)->play_pause_button), image);
 }
@@ -262,7 +262,7 @@ static void setup_playerctl(struct Window *ctx) {
 	gtk_button_box_set_layout(GTK_BUTTON_BOX(control_box), GTK_BUTTONBOX_EXPAND);
 	gtk_container_add(GTK_CONTAINER(box), control_box);
 
-	PLAYERCTL(ctx)->previous_button = gtk_button_new_from_icon_name("media-skip-backward", GTK_ICON_SIZE_BUTTON);
+	PLAYERCTL(ctx)->previous_button = gtk_button_new_from_icon_name("media-skip-backward-symbolic", GTK_ICON_SIZE_BUTTON);
 	g_signal_connect(PLAYERCTL(ctx)->previous_button, "clicked", G_CALLBACK(previous), ctx);
 	gtk_widget_set_name(PLAYERCTL(ctx)->previous_button, "previous-button");
 	gtk_container_add(GTK_CONTAINER(control_box), PLAYERCTL(ctx)->previous_button);
@@ -272,7 +272,7 @@ static void setup_playerctl(struct Window *ctx) {
 	gtk_widget_set_name(PLAYERCTL(ctx)->play_pause_button, "play-pause-button");
 	gtk_container_add(GTK_CONTAINER(control_box), PLAYERCTL(ctx)->play_pause_button);
 
-	PLAYERCTL(ctx)->next_button = gtk_button_new_from_icon_name("media-skip-forward", GTK_ICON_SIZE_BUTTON);
+	PLAYERCTL(ctx)->next_button = gtk_button_new_from_icon_name("media-skip-forward-symbolic", GTK_ICON_SIZE_BUTTON);
 	g_signal_connect(PLAYERCTL(ctx)->next_button, "clicked", G_CALLBACK(next), ctx);
 	gtk_widget_set_name(PLAYERCTL(ctx)->next_button, "next-button");
 	gtk_container_add(GTK_CONTAINER(control_box), PLAYERCTL(ctx)->next_button);
