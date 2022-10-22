@@ -138,11 +138,16 @@ static void setup_playback(struct Window *ctx, PlayerctlPlaybackStatus status) {
 }
 
 static void setup_metadata(struct Window *ctx) {
-	PlayerctlPlaybackStatus status = PLAYERCTL_PLAYBACK_STATUS_STOPPED;
-	if(current_player) g_object_get(current_player, "playback-status", &status, NULL);
+	if(!current_player) {
+		gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(ctx)->revealer), FALSE);
+		return;
+	}
+
+	PlayerctlPlaybackStatus status;
+	g_object_get(current_player, "playback-status", &status, NULL);
+	setup_playback(ctx, status);
 
 	setup_album_art(ctx);
-	setup_playback(ctx, status);
 	gtk_container_foreach(GTK_CONTAINER(PLAYERCTL(ctx)->label_box), widget_destroy, NULL);
 
 	gchar *title = playerctl_player_get_title(current_player, NULL);
@@ -189,7 +194,7 @@ static void setup_metadata(struct Window *ctx) {
 	gtk_widget_set_sensitive(PLAYERCTL(ctx)->play_pause_button, can_pause);
 	gtk_widget_set_sensitive(PLAYERCTL(ctx)->next_button, can_go_next);
 
-	gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(ctx)->revealer), current_player != NULL);
+	gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(ctx)->revealer), TRUE);
 	gtk_widget_show_all(PLAYERCTL(ctx)->revealer);
 }
 
@@ -201,6 +206,7 @@ static void setup_playerctl(struct Window *ctx) {
 	g_object_set(PLAYERCTL(ctx)->revealer, "margin", 5, NULL);
 	gtk_widget_set_name(PLAYERCTL(ctx)->revealer, "playerctl-revealer");
 	gtk_revealer_set_transition_type(GTK_REVEALER(PLAYERCTL(ctx)->revealer), GTK_REVEALER_TRANSITION_TYPE_NONE);
+	gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(ctx)->revealer), FALSE);
 
 	if(
 		g_strcmp0(position, "top-left") == 0 ||
