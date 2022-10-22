@@ -11,8 +11,6 @@
 #define MODULE_DATA(x) (x->module_data[self_id])
 #define PLAYERCTL(x) ((struct playerctl *)MODULE_DATA(x))
 
-extern void config_load(const char *path, const char *group, GOptionEntry entries[]);
-
 struct playerctl {
 	GtkWidget *revealer;
 	GtkWidget *album_art;
@@ -331,7 +329,6 @@ static void player_vanished(PlayerctlPlayerManager *self, PlayerctlPlayer *playe
 
 void on_activation(struct GtkLock *gtklock, int id) {
 	self_id = id;
-	config_load(gtklock->config_path, module_name, module_entries);
 
 	GError *error = NULL;
 	player_manager = playerctl_player_manager_new(&error);
