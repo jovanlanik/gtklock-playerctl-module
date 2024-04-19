@@ -1,5 +1,5 @@
 // gtklock-playerctl-module
-// Copyright (c) 2022 Jovan Lanik
+// Copyright (c) 2024 Jovan Lanik
 
 // Playerctl module
 
@@ -21,7 +21,7 @@ struct playerctl {
 };
 
 const gchar module_name[] = "playerctl";
-const guint module_major_version = 2;
+const guint module_major_version = 3;
 const guint module_minor_version = 0;
 
 static int self_id;
@@ -52,7 +52,7 @@ static void request_callback(GObject *source_object, GAsyncResult *res, gpointer
 
 	GInputStream *stream = soup_request_send_finish(SOUP_REQUEST(source_object), res, &error);
 	if(error != NULL) {
-		g_warning("Failed loading album art: %s", error->message);
+		g_warning("Failed loading album art (soup_request_send_finish): %s", error->message);
 		g_error_free(error);
 		error = NULL;
 
@@ -62,7 +62,7 @@ static void request_callback(GObject *source_object, GAsyncResult *res, gpointer
 
 	GdkPixbuf *pixbuf = gdk_pixbuf_new_from_stream_at_scale(stream, -1, art_size, TRUE, NULL, &error);
 	if(error != NULL) {
-		g_warning("Failed loading album art: %s", error->message);
+		g_warning("Failed loading album art (gdk_pixbuf_new_from_stream_at_scale): %s", error->message);
 		g_error_free(error);
 
 		setup_album_art_placeholder(ctx);
@@ -76,7 +76,7 @@ static void setup_album_art(struct Window *ctx) {
 	GError *error = NULL;
 	gchar *uri = playerctl_player_print_metadata_prop(current_player, "mpris:artUrl", NULL);
 	if(error != NULL) {
-		g_warning("Failed loading album art: %s", error->message);
+		g_warning("Failed loading album art (playerctl_player_print_metadata_prop): %s", error->message);
 		g_error_free(error);
 		error = NULL;
 
@@ -91,7 +91,7 @@ static void setup_album_art(struct Window *ctx) {
 
 	SoupRequest *request = soup_session_request(soup_session, uri, &error);
 	if(error != NULL) {
-		g_warning("Failed loading album art: %s", error->message);
+		g_warning("Failed loading album art (soup_session_request): %s", error->message);
 		g_error_free(error);
 
 		setup_album_art_placeholder(ctx);
@@ -135,6 +135,29 @@ static void setup_playback(struct Window *ctx, PlayerctlPlaybackStatus status) {
 	const gchar *icon = status == PLAYERCTL_PLAYBACK_STATUS_PLAYING ? "media-playback-pause-symbolic" : "media-playback-start-symbolic";
 	GtkWidget *image = gtk_image_new_from_icon_name(icon, GTK_ICON_SIZE_BUTTON);
 	gtk_button_set_image(GTK_BUTTON(PLAYERCTL(ctx)->play_pause_button), image);
+}
+
+static gboolean setup_button_sensitive_handler(gpointer user_data) {
+	if(current_player) {
+		struct Window *ctx = user_data;
+		gboolean can_go_next, can_go_previous, can_pause;
+		g_object_get(current_player,
+			"can-go-next", &can_go_next,
+			"can-go-previous", &can_go_previous,
+			"can-pause", &can_pause,
+			NULL
+		);
+
+		gtk_widget_set_sensitive(PLAYERCTL(ctx)->previous_button, can_go_previous);
+		gtk_widget_set_sensitive(PLAYERCTL(ctx)->play_pause_button, can_pause);
+		gtk_widget_set_sensitive(PLAYERCTL(ctx)->next_button, can_go_next);
+	}
+	return G_SOURCE_REMOVE;
+}
+
+static void setup_button_sensitive(struct Window *ctx) {
+	g_timeout_add_seconds(1, setup_button_sensitive_handler, ctx);
+	setup_button_sensitive_handler(ctx);
 }
 
 static void setup_metadata(struct Window *ctx) {
@@ -182,17 +205,7 @@ static void setup_metadata(struct Window *ctx) {
 		gtk_container_add(GTK_CONTAINER(PLAYERCTL(ctx)->label_box), artist_label);
 	}
 
-	gboolean can_go_next, can_go_previous, can_pause;
-	g_object_get(current_player,
-		"can-go-next", &can_go_next,
-		"can-go-previous", &can_go_previous,
-		"can-pause", &can_pause,
-		NULL
-	);
-
-	gtk_widget_set_sensitive(PLAYERCTL(ctx)->previous_button, can_go_previous);
-	gtk_widget_set_sensitive(PLAYERCTL(ctx)->play_pause_button, can_pause);
-	gtk_widget_set_sensitive(PLAYERCTL(ctx)->next_button, can_go_next);
+	setup_button_sensitive(ctx);
 
 	gtk_revealer_set_reveal_child(GTK_REVEALER(PLAYERCTL(ctx)->revealer), TRUE);
 	gtk_widget_show_all(PLAYERCTL(ctx)->revealer);

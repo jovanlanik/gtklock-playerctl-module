@@ -1,5 +1,5 @@
 // gtklock-playerctl-module
-// Copyright (c) 2022 Jovan Lanik
+// Copyright (c) 2024 Jovan Lanik
 
 // Module header
 
@@ -21,13 +21,13 @@ struct Window {
 	GtkWidget *warning_label;
 	GtkWidget *clock_label;
 
-	gulong enter_notify_handler;
-
 	void *module_data[];
 };
 
 struct GtkLock {
 	GtkApplication *app;
+	void *lock;
+
 	GArray *windows;
 	GArray *messages;
 	GArray *errors;
@@ -39,13 +39,12 @@ struct GtkLock {
 	guint draw_clock_source;
 	guint idle_hide_source;
 
-	gboolean use_layer_shell;
-	gboolean use_input_inhibit;
 	gboolean use_idle_hide;
 
 	char *time;
 	char *time_format;
 	char *config_path;
+	char *layout_path;
 
 	GArray *modules;
 };
@@ -57,8 +56,8 @@ void on_output_change(struct GtkLock *gtklock);
 void on_focus_change(struct GtkLock *gtklock, struct Window *win, struct Window *old);
 void on_idle_hide(struct GtkLock *gtklock);
 void on_idle_show(struct GtkLock *gtklock);
-void on_window_create(struct GtkLock *gtklock, struct Window *ctx);
-void on_window_destroy(struct GtkLock *gtklock, struct Window *ctx);
+void on_window_create(struct GtkLock *gtklock, struct Window *win);
+void on_window_destroy(struct GtkLock *gtklock, struct Window *win);
 
 /*
 
