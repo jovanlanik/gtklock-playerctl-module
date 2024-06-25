@@ -41,63 +41,59 @@ GOptionEntry module_entries[] = {
 	{ NULL },
 };
 
-static void setup_album_art_placeholder(struct Window *ctx) {
-	gtk_image_set_from_icon_name(GTK_IMAGE(PLAYERCTL(ctx)->album_art) , "audio-x-generic-symbolic", GTK_ICON_SIZE_BUTTON);
-	return;
-}
-
-static void request_callback(GObject *source_object, GAsyncResult *res, gpointer user_data) {
-	struct Window *ctx = user_data;
+static void set_art_from_stream(GInputStream *stream, struct Window *ctx) {
 	GError *error = NULL;
-
-	GInputStream *stream = soup_request_send_finish(SOUP_REQUEST(source_object), res, &error);
-	if(error != NULL) {
-		g_warning("Failed loading album art (soup_request_send_finish): %s", error->message);
-		g_error_free(error);
-		error = NULL;
-
-		setup_album_art_placeholder(ctx);
-		return;
-	}
-
 	GdkPixbuf *pixbuf = gdk_pixbuf_new_from_stream_at_scale(stream, -1, art_size, TRUE, NULL, &error);
 	if(error != NULL) {
 		g_warning("Failed loading album art (gdk_pixbuf_new_from_stream_at_scale): %s", error->message);
 		g_error_free(error);
-
-		setup_album_art_placeholder(ctx);
 		return;
 	}
-
 	gtk_image_set_from_pixbuf(GTK_IMAGE(PLAYERCTL(ctx)->album_art), pixbuf);
 }
 
+static void file_callback(GObject *source_object, GAsyncResult *res, gpointer user_data) {
+	GError *error = NULL;
+	GFileInputStream *stream = g_file_read_finish(G_FILE(source_object), res, &error);
+	if(error != NULL) {
+		g_warning("Failed loading album art (g_file_read_finish): %s", error->message);
+		g_error_free(error);
+		return;
+	}
+	set_art_from_stream(G_INPUT_STREAM(stream), user_data);
+}
+
+static void request_callback(GObject *source_object, GAsyncResult *res, gpointer user_data) {
+	GError *error = NULL;
+	GInputStream *stream = soup_session_send_finish(SOUP_SESSION(source_object), res, &error);
+	if(error != NULL) {
+		g_warning("Failed loading album art (soup_request_send_finish): %s", error->message);
+		g_error_free(error);
+		return;
+	}
+	set_art_from_stream(stream, user_data);
+}
+
 static void setup_album_art(struct Window *ctx) {
+	gtk_image_set_from_icon_name(GTK_IMAGE(PLAYERCTL(ctx)->album_art) , "audio-x-generic-symbolic", GTK_ICON_SIZE_BUTTON);
+
 	GError *error = NULL;
 	gchar *uri = playerctl_player_print_metadata_prop(current_player, "mpris:artUrl", NULL);
 	if(error != NULL) {
 		g_warning("Failed loading album art (playerctl_player_print_metadata_prop): %s", error->message);
 		g_error_free(error);
-		error = NULL;
-
-		setup_album_art_placeholder(ctx);
 		return;
 	}
 
-	if(!uri || uri[0] == '\0') {
-		setup_album_art_placeholder(ctx);
-		return;
-	}
+	if(!uri || uri[0] == '\0') return;
 
-	SoupRequest *request = soup_session_request(soup_session, uri, &error);
-	if(error != NULL) {
-		g_warning("Failed loading album art (soup_session_request): %s", error->message);
-		g_error_free(error);
-
-		setup_album_art_placeholder(ctx);
-		return;
+	if(g_strcmp0("file", g_uri_peek_scheme(uri)) == 0) {
+		GFile *file = g_file_new_for_uri(uri);
+		g_file_read_async(file, G_PRIORITY_DEFAULT, NULL, file_callback, ctx);
+	} else {
+		SoupMessage *msg = soup_message_new(SOUP_METHOD_GET, uri);
+		soup_session_send_async(soup_session, msg, G_PRIORITY_DEFAULT, NULL, request_callback, ctx);
 	}
-	soup_request_send_async(request, NULL, request_callback, ctx);
 }
 
 static void play_pause(GtkButton *self, gpointer user_data) {

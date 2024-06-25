@@ -9,7 +9,7 @@ PREFIX = /usr/local
 LIBDIR = $(PREFIX)/lib
 INSTALL = install
 
-LIBS := gtk+-3.0 gmodule-export-2.0 playerctl libsoup-2.4
+LIBS := gtk+-3.0 gmodule-export-2.0 playerctl libsoup-3.0
 CFLAGS += -std=c11 -fPIC $(shell pkg-config --cflags $(LIBS))
 LDLIBS += $(shell pkg-config --libs $(LIBS))
 
