@@ -11,4 +11,4 @@ __⚠️ Module version matches the compatible gtklock version. Other versions m
 - pkg-config (build-time)
 - gtk+3.0
 - playerctl
-- libsoup-2.4
+- libsoup-3.0
