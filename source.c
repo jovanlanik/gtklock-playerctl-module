@@ -243,15 +243,10 @@ static void setup_playerctl(struct Window *ctx) {
 		gtk_widget_set_halign(PLAYERCTL(ctx)->revealer, GTK_ALIGN_CENTER);
 	} 
 
-	gboolean under = g_strcmp0(position, "under-clock") == 0;
-	if(under || g_strcmp0(position, "above-clock") == 0) {
-		GValue val = G_VALUE_INIT;
-		g_value_init(&val, G_TYPE_INT);
-		gtk_container_child_get_property(GTK_CONTAINER(ctx->window_box), ctx->clock_label, "position", &val);
-		gint pos = g_value_get_int(&val);
-
-		gtk_container_add(GTK_CONTAINER(ctx->window_box), PLAYERCTL(ctx)->revealer);
-		gtk_box_reorder_child(GTK_BOX(ctx->window_box), PLAYERCTL(ctx)->revealer, pos + under);
+	gboolean above = g_strcmp0(position, "above-clock") == 0;
+	if(above || g_strcmp0(position, "under-clock") == 0) {
+		gtk_container_add(GTK_CONTAINER(ctx->info_box), PLAYERCTL(ctx)->revealer);
+		if(above) gtk_box_reorder_child(GTK_BOX(ctx->info_box), PLAYERCTL(ctx)->revealer, 0);
 	}
 	else gtk_overlay_add_overlay(GTK_OVERLAY(ctx->overlay), PLAYERCTL(ctx)->revealer);
 
