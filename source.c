@@ -374,6 +374,7 @@ void on_focus_change(struct GtkLock *gtklock, struct Window *win, struct Window 
 
 void on_window_destroy(struct GtkLock *gtklock, struct Window *ctx) {
 	if(MODULE_DATA(ctx) != NULL) {
+		gtk_widget_destroy(PLAYERCTL(ctx)->revealer);
 		g_free(MODULE_DATA(ctx));
 		MODULE_DATA(ctx) = NULL;
 	}
