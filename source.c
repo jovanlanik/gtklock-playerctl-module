@@ -87,12 +87,15 @@ static void setup_album_art(struct Window *ctx) {
 
 	if(!uri || uri[0] == '\0') return;
 
-	if(g_strcmp0("file", g_uri_peek_scheme(uri)) == 0) {
+	const char *scheme = g_uri_peek_scheme(uri);
+	if(g_strcmp0("file", scheme) == 0) {
 		GFile *file = g_file_new_for_uri(uri);
 		g_file_read_async(file, G_PRIORITY_DEFAULT, NULL, file_callback, ctx);
-	} else {
+	} else if(g_strcmp0("http", scheme) == 0 || g_strcmp0("https", scheme) == 0) {
 		SoupMessage *msg = soup_message_new(SOUP_METHOD_GET, uri);
 		soup_session_send_async(soup_session, msg, G_PRIORITY_DEFAULT, NULL, request_callback, ctx);
+	} else {
+		g_warning("Failed loading album art (g_uri_peek_scheme): Unknown scheme");
 	}
 }
 
