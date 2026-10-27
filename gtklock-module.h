@@ -1,5 +1,5 @@
 // gtklock-playerctl-module
-// Copyright (c) 2024 Jovan Lanik
+// Copyright (c) 2026 Jovan Lanik
 
 // Module header
 
@@ -56,8 +56,11 @@ struct GtkLock {
 	char *layout_path;
 	char *lock_command;
 	char *unlock_command;
+	char *idle_command;
 
 	GArray *modules;
+
+	gboolean test_mode;
 };
 
 const gchar *g_module_check_init(GModule *m);
